@@ -1,62 +1,52 @@
 #include <stdio.h>
 #include <unistd.h>
-#include <sys/wait.h>
-#include <stdlib.h>
 #include <string.h>
+#include <sys/wait.h>
 
-int main() {
-  // Create a pipe
-  int pipefd[2];
-  if (pipe(pipefd) < 0) {
-    perror("Error creating pipe");
-    exit(1);
-  }
-
-  // Create a new process
-  pid_t pid = fork();
-
-  if (pid < 0) {
-    // Print an error message and exit if the process creation failed
-    perror("Error creating process");
-    exit(1);
-  } else if (pid == 0) {
-    // Child process: read from the pipe and print the message
-
-    // Close the write end of the pipe
-    close(pipefd[1]);
-
-    // Read from the pipe
-    char message[1024];
-    if (read(pipefd[0], message, sizeof(message)) < 0) {
-      perror("Error reading from pipe");
-      exit(1);
+int main(void) {
+    // Create the pipe
+    int pipefd[2];
+    if (pipe(pipefd) == -1) {
+        perror("pipe");
+        return 1;
     }
 
-    // Print the message to standard output
-    printf("%s\n", message);
-
-    // Close the read end of the pipe
-    close(pipefd[0]);
-  } else {
-    // Parent process: write to the pipe
-
-    // Close the read end of the pipe
-    close(pipefd[0]);
-
-    // Write to the pipe
-    const char* message = "I love you";
-    if (write(pipefd[1], message, strlen(message)) < 0) {
-      perror("Error writing to pipe");
-      exit(1);
+    // Fork the process
+    pid_t pid = fork();
+    if (pid == -1) {
+        perror("fork");
+        return 1;
     }
 
-    // Close the write end of the pipe
-    close(pipefd[1]);
+    if (pid == 0) {
+        // Child process: read from the pipe
+        close(pipefd[1]); // Close the write end of the pipe
 
-    // Wait for the child process to terminate
-    int status;
-    waitpid(pid, &status, 0);
-  }
+        // Read from the pipe
+        char buf[1024];
+        ssize_t n = read(pipefd[0], buf, sizeof(buf));
+        if (n == -1) {
+            perror("read");
+            return 1;
+        }
 
-  return 0;
+        // Print the message
+        printf("Received message: %.*s\n", (int)n, buf);
+    } else {
+        // Parent process: write to the pipe
+        close(pipefd[0]); // Close the read end of the pipe
+
+        // Write to the pipe
+        const char *message = "I love you";
+        ssize_t n = write(pipefd[1], message, strlen(message));
+        if (n == -1) {
+            perror("write");
+            return 1;
+        }
+
+        // Wait for the child process to exit
+        wait(NULL);
+    }
+
+    return 0;
 }
